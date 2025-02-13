@@ -15,7 +15,7 @@ db = SQLAlchemy()
 
 class Config:
     """App configuration variables."""
-    if os.getenv("FLASK_ENV") == "developmentserver":
+    if os.getenv("FLASK_ENV") == "development":
         SQLALCHEMY_DATABASE_URI = "sqlite:///" + os.path.join(os.path.abspath(os.path.dirname(__file__)), "local.db")
 
     else:
