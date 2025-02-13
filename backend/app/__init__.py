@@ -21,6 +21,7 @@ class Config:
     else:
         POSTGRES_URI = os.getenv("POSTGRES_URI")
         SQLALCHEMY_DATABASE_URI = POSTGRES_URI
+
     print(SQLALCHEMY_DATABASE_URI)
 
     SQLALCHEMY_TRACK_MODIFICATIONS = False
