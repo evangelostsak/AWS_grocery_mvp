@@ -4,9 +4,13 @@ from flask import jsonify, request, current_app, send_from_directory, redirect
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from ..models.user_model import User
-from ..services.user_service import add_to_favorites, get_user_favorites, remove_from_favorites, sync_basket_service, \
-    get_user_basket, remove_from_basket_service, add_product_to_purchased, get_user_purchased_products, get_user_info, \
-    clear_user_basket, save_avatar, UPLOAD_FOLDER, get_all_users, get_avatar_url
+from ..services.user_service import (
+    add_to_favorites, get_user_favorites, remove_from_favorites,
+    sync_basket_service, get_user_basket, remove_from_basket_service,
+    add_product_to_purchased, get_user_purchased_products, get_user_info,
+    clear_user_basket, save_avatar, UPLOAD_FOLDER, get_all_users, get_avatar_url,
+    USE_S3_STORAGE, s3_client, S3_BUCKET, DEFAULT_AVATAR
+)
 
 
 @jwt_required()
@@ -231,14 +235,32 @@ def upload_avatar():
 
 def serve_avatar(filename):
     """
-    Serve the avatar image from the local avatar folder.
+    Serve avatar images through backend, either from S3 or local storage
     """
-    local_avatar_path = os.path.join(UPLOAD_FOLDER, filename)
+    if USE_S3_STORAGE and s3_client:
+        try:
+            response = s3_client.get_object(
+                Bucket=S3_BUCKET,
+                Key=f"avatars/{filename}"
+            )
+            from flask import send_file
+            from io import BytesIO
+            return send_file(
+                BytesIO(response['Body'].read()),
+                mimetype=response.get('ContentType', 'image/jpeg')
+            )
+        except Exception as e:
+            current_app.logger.error(f"Error getting avatar from S3: {str(e)}")
+            if filename != DEFAULT_AVATAR:
+                return serve_avatar(DEFAULT_AVATAR)
 
+    # Local storage or S3 fallback
+    local_avatar_path = os.path.join(UPLOAD_FOLDER, filename)
     if os.path.exists(local_avatar_path):
         return send_from_directory(UPLOAD_FOLDER, filename)
 
-    default_avatar_path = os.path.join(UPLOAD_FOLDER, "user_default.png")
+    default_avatar_path = os.path.join(UPLOAD_FOLDER, DEFAULT_AVATAR)
     if os.path.exists(default_avatar_path):
-        return send_from_directory(UPLOAD_FOLDER, "user_default.png")
+        return send_from_directory(UPLOAD_FOLDER, DEFAULT_AVATAR)
+
     return jsonify({"error": "Avatar not found"}), 404
