@@ -1,6 +1,7 @@
 import os
+from io import BytesIO
 
-from flask import jsonify, request, current_app, send_from_directory, redirect
+from flask import jsonify, request, current_app, send_from_directory, redirect, send_file
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from ..models.user_model import User
@@ -9,7 +10,7 @@ from ..services.user_service import (
     sync_basket_service, get_user_basket, remove_from_basket_service,
     add_product_to_purchased, get_user_purchased_products, get_user_info,
     clear_user_basket, save_avatar, UPLOAD_FOLDER, get_all_users, get_avatar_url,
-    USE_S3_STORAGE, s3_client, S3_BUCKET, DEFAULT_AVATAR
+    USE_S3_STORAGE, s3_client, S3_BUCKET, DEFAULT_AVATAR, DEFAULT_AVATAR_LOCAL_PATH
 )
 
 
@@ -235,32 +236,47 @@ def upload_avatar():
 
 def serve_avatar(filename):
     """
-    Serve avatar images through backend, either from S3 or local storage
+    Serve avatar images through backend, either from S3 or local storage.
+    Always fallback to default avatar if there's any issue.
     """
     if USE_S3_STORAGE and s3_client:
         try:
+            if filename == DEFAULT_AVATAR:
+                response = s3_client.get_object(
+                    Bucket=S3_BUCKET,
+                    Key=f"avatars/{DEFAULT_AVATAR}"
+                )
+                return send_file(
+                    BytesIO(response['Body'].read()),
+                    mimetype=response.get('ContentType', 'image/jpeg')
+                )
+
+            # Try to get requested avatar
             response = s3_client.get_object(
                 Bucket=S3_BUCKET,
                 Key=f"avatars/{filename}"
             )
-            from flask import send_file
-            from io import BytesIO
             return send_file(
                 BytesIO(response['Body'].read()),
                 mimetype=response.get('ContentType', 'image/jpeg')
             )
         except Exception as e:
             current_app.logger.error(f"Error getting avatar from S3: {str(e)}")
-            if filename != DEFAULT_AVATAR:
-                return serve_avatar(DEFAULT_AVATAR)
+            try:
+                response = s3_client.get_object(
+                    Bucket=S3_BUCKET,
+                    Key=f"avatars/{DEFAULT_AVATAR}"
+                )
+                return send_file(
+                    BytesIO(response['Body'].read()),
+                    mimetype=response.get('ContentType', 'image/jpeg')
+                )
+            except Exception as e:
+                current_app.logger.error(f"Error getting default avatar from S3: {str(e)}")
+                if os.path.exists(DEFAULT_AVATAR_LOCAL_PATH):
+                    return send_from_directory(UPLOAD_FOLDER, DEFAULT_AVATAR)
 
-    # Local storage or S3 fallback
-    local_avatar_path = os.path.join(UPLOAD_FOLDER, filename)
-    if os.path.exists(local_avatar_path):
-        return send_from_directory(UPLOAD_FOLDER, filename)
-
-    default_avatar_path = os.path.join(UPLOAD_FOLDER, DEFAULT_AVATAR)
-    if os.path.exists(default_avatar_path):
+    if filename != DEFAULT_AVATAR and os.path.exists(DEFAULT_AVATAR_LOCAL_PATH):
         return send_from_directory(UPLOAD_FOLDER, DEFAULT_AVATAR)
 
     return jsonify({"error": "Avatar not found"}), 404
