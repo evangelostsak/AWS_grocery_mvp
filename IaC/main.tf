@@ -44,7 +44,7 @@ resource "aws_security_group" "ec2_sg" {
 }
 
 resource "aws_instance" "aws_grocery_terraform" {
-  ami                    = "ami-0cdd6d7420844683b"
+  ami                    = "ami-099b9a78992042e1f"
   instance_type          = "t2.micro"
   security_groups        = [aws_security_group.ec2_sg.name]
   key_name               = aws_key_pair.existing_key.key_name
