@@ -65,6 +65,7 @@ resource "aws_iam_instance_profile" "ec2_instance_profile" {
   role = aws_iam_role.ec2_s3_role.name
 }
 
+# S3 Bucket Policy
 resource "aws_s3_bucket_policy" "bucket_policy" {
   bucket = aws_s3_bucket.bucket.id
   policy = jsonencode({
