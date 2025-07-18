@@ -1,8 +1,8 @@
-# 🚀 AWS Grocery App Deployment Guide  
+# AWS Grocery App Deployment Guide  
 
 This project demonstrates a **cloud-native deployment** of a grocery web application using **AWS infrastructure** and **Terraform**.
 
-## 🌍 AWS Services Used  
+##  AWS Services Used  
 
 | **AWS Service**       | **Purpose** |
 |-------------------|---------|
@@ -22,11 +22,11 @@ This project demonstrates a **cloud-native deployment** of a grocery web applica
 
 ---
 
-## 🖥️ 1️⃣ Deploying EC2 Instance 
+##  Deploying EC2 Instance 
 
 Amazon EC2 is used to host the **Grocery app**, making it accessible globally.
 
-### ✅ Key Configurations  
+###  Key Configurations  
 - **AMI:** AWS Linux (`ami-099b9a78992042e1f`) (**custom AMI**) 
 - **Instance Type:** `t2.micro` (Free-tier eligible)  
 - **IAM Role:** Allows EC2 to access **S3 avatars**  
@@ -64,10 +64,10 @@ EOF
 }
 ```
 
-## 🛢️ 2️⃣ Migrating to Amazon RDS
+## Migrating to Amazon RDS
 To replace local database storage, I migrated to Amazon RDS (PostgreSQL) for scalability & reliability.
 
-### ✅ Why RDS?
+### Why RDS?
 
 - ✔️ Scalability – Handles large database queries efficiently
 - ✔️ Automatic Backups – Managed by AWS
@@ -98,7 +98,7 @@ resource "aws_security_group_rule" "allow_rds_from_ec2" {
   source_security_group_id = aws_security_group.ec2_sg.id
 }
 ```
-## 🔒 3️⃣ Securing the Network with Security Groups
+## Securing the Network with Security Groups
 Security groups ensure that only the right AWS services can communicate.
 ### Security Group Rules
 | **Resource** | **Allowed Ports** | **Source** | **Purpose** |
@@ -108,9 +108,9 @@ Security groups ensure that only the right AWS services can communicate.
 | **ALB**     | `80`              | `0.0.0.0/0` | Public HTTP traffic |
 | **RDS**     | `5432`            | EC2 Security Group | Database access |
 
-## ⚖️ 4️⃣ Application Load Balancer (ALB) for Traffic Distribution  
+## Application Load Balancer (ALB) for Traffic Distribution  
 
-### ✅ Why ALB?  
+### Why ALB?  
 ✔️ Distributes traffic efficiently  
 ✔️ Ensures **high availability**  
 ✔️ Handles **auto-scaling**  
@@ -134,11 +134,11 @@ resource "aws_lb_listener" "http" {
   }
 }
 ```
-## 📦 5️⃣ Storing Avatars in S3 Instead of Locally  
+## Storing Avatars in S3 Instead of Locally  
 
 Instead of storing user avatars on EC2, I moved them to **Amazon S3** for better scalability and availability.
 
-### ✅ Why Use S3?  
+### Why Use S3?  
 ✔️ **Faster performance** – No impact on EC2 storage  
 ✔️ **No need for additional disk space** on the instance  
 ✔️ **Easier backups and durability** – AWS manages storage reliability  
@@ -163,11 +163,11 @@ USE_S3_STORAGE=true
 This ensures that avatars are no longer stored on EC2, improving performance and scalability.
 
  
-## 📊 6️⃣ CloudWatch Monitoring & Alerts  
+## CloudWatch Monitoring & Alerts  
  
 To ensure system reliability, I set up **AWS CloudWatch** to monitor key performance metrics and trigger alerts when needed.  
  
-### ✅ What We Monitor?  
+### What We Monitor?  
 ✔️ **CPU Utilization** – Prevents EC2 overload  
 ✔️ **Disk Space** – Avoids system failures due to low storage  
 ✔️ **RDS Performance** – Tracks database connections & latency  
@@ -193,7 +193,7 @@ With CloudWatch in place, I can monitor application health and receive alerts if
 
 IAM Roles ensure **EC2 can securely access S3 & CloudWatch** without needing static credentials.  
 
-### ✅ Why Use IAM Roles?  
+### Why Use IAM Roles?  
 ✔️ **Increases security** – No hardcoded credentials  
 ✔️ **Grants Least Privilege Access** – Only necessary permissions are assigned  
 ✔️ **Allows EC2 to interact with AWS services like S3 & CloudWatch**  
@@ -231,47 +231,47 @@ resource "aws_iam_role_policy_attachment" "cloudwatch_access" {
 
 This ensures that the EC2 instance can **securely access S3 for avatar storage** and **send logs/metrics to CloudWatch** without manual key management.
 
-## 🚀 Deployment Steps  
+## Deployment Steps  
 Follow these steps to deploy the Grocery App using **Terraform and Docker** on AWS:  
-### **1️⃣ Initialize Terraform**  
+### ** Initialize Terraform**  
 Run the following command to download necessary provider plugins and initialize Terraform:
 ```sh
 terraform init
 ```
-### **2️⃣ Plan the Infrastructure**  
+### ** Plan the Infrastructure**  
 Check what changes will be applied before deploying:
 ```sh
 terraform plan
 ```
-### **3️⃣ Apply Terraform Configuration**  
+### ** Apply Terraform Configuration**  
 Deploy the infrastructure on AWS:
 ```sh
 terraform apply -auto-approve
 ```
-### **4️⃣ Connect to the EC2 Instance**  
+### ** Connect to the EC2 Instance**  
 Once the instance is running, SSH into it:
 ```sh
 ssh -i your-key.pem ec2-user@your-ec2-public-ip
 ```
-### **5️⃣ Start the Application Using Docker**  
+### ** Start the Application Using Docker**  
 Navigate to the project directory and run Docker Compose:
 ```sh
 cd /home/AWS_grocery
 sudo docker-compose up -d --build
 ```
-### **6️⃣ Verify the Deployment**  
+### ** Verify the Deployment**  
 Check if the containers are running:
 ```sh
 sudo docker ps
 ```
 Visit the **Application Load Balancer (ALB) DNS URL** in your browser to access the app.
-### **7️⃣ Monitor with CloudWatch**  
+### ** Monitor with CloudWatch**  
 View logs and metrics:
 ```sh
 aws logs describe-log-groups
 aws logs tail /aws/ec2/syslog --follow
 ```
-### **8️⃣ Destroy Infrastructure when you are done**  
+### ** Destroy Infrastructure when you are done**  
 To remove all AWS resources:
 ```sh
 terraform destroy -auto-approve
