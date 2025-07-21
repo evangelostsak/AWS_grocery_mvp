@@ -118,6 +118,10 @@ variable "db_pass" {
   sensitive   = true
 }
 
+variable "read_replica_az" {
+  description = "Availability zone for read replica"
+  type        = string
+}
 # Monitoring Variables
 variable "alert_email" {
   description = "Email address to receive CloudWatch alerts"

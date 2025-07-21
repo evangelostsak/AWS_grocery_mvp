@@ -15,6 +15,20 @@ resource "aws_db_instance" "db_instance" {
   vpc_security_group_ids = [aws_security_group.rds_sg.id]
 }
 
+resource "aws_db_instance" "db_read_replica" {
+  identifier              = "${var.db_name}-replica"
+  instance_class          = var.db_class
+  engine                  = "postgres"
+  replicate_source_db     = aws_db_instance.db_instance.id
+  db_subnet_group_name    = aws_db_subnet_group.db_subnet_group.name
+  vpc_security_group_ids  = [aws_security_group.rds_sg.id]
+  publicly_accessible     = false
+  monitoring_interval     = 60
+  monitoring_role_arn     = aws_iam_role.rds_monitoring.arn
+  availability_zone       = var.read_replica_az
+
+  depends_on = [aws_db_instance.db_instance]
+}
 resource "aws_db_subnet_group" "db_subnet_group" {
   name       = "grocery-db-subnet-group"
   subnet_ids = [
