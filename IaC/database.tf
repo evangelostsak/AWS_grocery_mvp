@@ -10,6 +10,22 @@ resource "aws_db_instance" "db_instance" {
   skip_final_snapshot = true
   monitoring_interval = 60  # Enhanced monitoring every 60s
   monitoring_role_arn = aws_iam_role.rds_monitoring.arn
+  db_subnet_group_name = aws_db_subnet_group.db_subnet_group.name
+  publicly_accessible  = false
+  vpc_security_group_ids = [aws_security_group.rds_sg.id]
+}
+
+resource "aws_db_subnet_group" "db_subnet_group" {
+  name       = "grocery-db-subnet-group"
+  subnet_ids = [
+    aws_subnet.private_a.id,
+    aws_subnet.private_b.id,
+    aws_subnet.private_c.id,
+  ]
+
+  tags = {
+    Name = "grocery-db-subnet-group"
+  }
 }
 
 
