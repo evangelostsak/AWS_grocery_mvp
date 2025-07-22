@@ -1,211 +1,241 @@
-## Requirements
-To make this app work make sure you have this installed on your computer:
-- Python(use `pyenv` to install and manage compatible versions [3.12/3.11])
-- PostgreSQL
-- Node.js and npm
-- Git
 
-GroceryMate
+# Masterschool AWS Grocery App Deployment
 
+## **About**
 
-Overview
+This project is part of the Cloud Track in the Masterschool Software Engineering bootcamp. The app was built by our mentor Alejandro Román. Our task was to design and deploy the **AWS infrastructure** step by step using **Terraform**.
 
-GroceryMate is a comprehensive e-commerce platform offering the following features:
+I focused on implementing each AWS component to ensure a scalable and reliable setup. The goal was to practice and learn about AWS and Terraform with this hands-on Project.
 
-    User Authentication: Register and login functionality.
-    Protected Routes: All the routes that need to be authenticated will redirect to /auth
-    Product Search: Search for products, sort them by price, and filter by categories.
-    Favorites: Add products to your favorites list.
-    Shopping Basket: Add products to your basket and manage them.
-    Check-out Process: Complete the checkout process with billing and shipping information, choose payment methods, and calculate the total price.
+For app features and local install instructions, see [`README.md`](app.md).
 
-Features
+This Repo covers only the AWS infrastructure and deployment.
 
-    Register, Login, and Logout: Secure user authentication system.
-    Product Search and Sorting: Search for products, and sort them by price or name in both ASC and DESC.
-    Product Category and Price Range: Get the product by categories or range of price
-    Favorites: Manage your favorite products.
-    Shopping Basket: Add products to your basket, view, and modify the contents.
-    Check-out Process:
-        Billing and Shipping Information
-        Payment Method Selection
-        Total Price Calculation
+## Architecture Diagram
+A full architecture diagram has been designed showing:
 
-Screenshots and videos
+- Custom VPC with 3 AZs  
+- EC2 instances in Auto Scaling Group behind an Application Load Balancer  
+- RDS + Read Replica in private subnets  
+- S3 access outside the VPC  
+- CloudWatch → Alarm → SNS → Email alert flow
 
+![Architecture](./infastructure/grocery.png)
 
-![imagen](https://github.com/user-attachments/assets/ea039195-67a2-4bf2-9613-2ee1e666231a)
-![imagen](https://github.com/user-attachments/assets/a87e5c50-5a9e-45b8-ad16-2dbff41acd00)
-![imagen](https://github.com/user-attachments/assets/589aae62-67ef-4496-bd3b-772cd32ca386)
-![imagen](https://github.com/user-attachments/assets/2772b85e-81f7-446a-9296-4fdc2b652cb7)
+---
 
-https://github.com/user-attachments/assets/d1c5c8e4-5b16-486a-b709-4cf6e6cce6bc
+## AWS Services Used
 
+| **AWS Service**       | **Purpose** |
+|-----------------------|-------------|
+| **EC2 (ASG)**         | Hosts the Flask application across 3 AZs |
+| **Amazon RDS**        | Primary database |
+| **Read Replica**      | Offloads read queries |
+| **Application Load Balancer (ALB)** | Distributes traffic efficiently |
+| **S3 Bucket**         | Stores avatars |
+| **CloudWatch + Alarms** | Monitors EC2 metrics |
+| **SNS**               | Sends email alerts |
+| **IAM Roles**         | Secure access from EC2 to S3 & CloudWatch |
+| **Security Groups**   | Network access control |
+| **Custom VPC**        | Isolated, secure networking environment |
 
+---
 
+## Services worth mentioning
 
-Installation
+| **Service**             | **Purpose**                                   |
+|-------------------------|-----------------------------------------------|
+| **Docker & docker-compose** | Containerization of the backend & frontend |
 
-Follow these steps to set up the application locally.
-Create .env files in the backend and frontend, and follow the .env.examples to know what is required
+---
 
-## Clone repository
+## Custom VPC and Network Design
 
-Clone the repository:
+- Custom VPC across 3 Availability Zones
+- **3 Public Subnets** for EC2/ALB/ASG  
+- **3 Private Subnets** for RDS and Read Replica  
+- Internet Gateway for public subnet internet access  
+- Security Groups for traffic control  
+- No NAT Gateway (public EC2s, private RDS doesn't require internet)
 
-    git clone --branch version1 https://github.com/AlejandroRomanIbanez/AWS_grocery.git
-    
+---
 
-## Install pyenv and python (if you haven't yet)
+## Deploying EC2 Instances via Auto Scaling Group (ASG)
 
+The application runs on 3 EC2 instances using an **Auto Scaling Group** for fault tolerance.
 
-### On macOS/Linux:
+### Key Configurations
+- **AMI:** Custom AMI with Docker and app preinstalled
+- **Instance Type:** `t3.micro`
+- **Auto Scaling Group:** Maintains 3 instances across 3 AZs
+- **IAM Role:** Enables access to S3 and CloudWatch
+- **ALB:** Routes HTTP traffic to EC2s
+- **User Data:** Installs CloudWatch agent and starts Docker
 
-Follow the instructions [here](https://github.com/pyenv/pyenv-installer) to install pyenv
+### Terraform Code Snippet (ASG)
+```hcl
+resource "aws_autoscaling_group" "app_asg" {
+  name                      = "grocery-asg"
+  desired_capacity          = 3
+  min_size                  = 3
+  max_size                  = 3
+  vpc_zone_identifier       = var.public_subnet_ids
+  launch_template {
+    id      = aws_launch_template.app_launch_template.id
+    version = "$Latest"
+  }
+  target_group_arns         = [aws_lb_target_group.instances.arn]
+  health_check_type         = "EC2"
+  health_check_grace_period = 300
+  force_delete              = true
+}
+```
+---
 
-### On Windows:
+## Application Load Balancer (ALB)
 
-Use pyenv-win, you can find it [here](https://github.com/pyenv-win/pyenv-win), follow the instructions to install it
+Distributes traffic across EC2s in all 3 AZs via the ASG.
 
-### Install Python with `pyenv` (if you don't have it on your machine yet)
+✔️ Handles auto-scaling  
+✔️ Ensures fault tolerance  
+✔️ Publicly accessible via HTTP (port 80)
 
-Install Python 3.12.x (or 3.11.x): 
+### Note:
+No manual target attachment is needed — **ASG handles target registration**.
 
-    pyenv install 3.12.1
+---
 
-Check Python version now using:
+## Amazon RDS + Read Replica
 
-    python3 --version
+- **Primary RDS instance** in one private subnet  
+- **Read Replica** in a different AZ/private subnet  
+- PostgreSQL engine  
+- Publicly inaccessible (private subnets only)  
+- EC2s access RDS via security group rules  
+
+---
+
+## S3 Avatar Storage
+
+User-uploaded avatars are stored in **Amazon S3**, not on EC2 instances.
+
+✔️ Improves performance  
+✔️ Offloads EC2 disk usage  
+✔️ Regional, outside the VPC  
+
+`.env` snippet:
+```env
+S3_BUCKET_NAME=your-bucket-name
+S3_REGION=eu-central-1
+USE_S3_STORAGE=true
+````
+---
+
+## IAM Roles
+
+**IAM roles** assigned to EC2 allow secure access to:
+
+- S3 bucket  
+- CloudWatch agent & logs  
+
+Avoids hardcoded credentials.
+
+---
+
+## CloudWatch Monitoring & Alerts
+
+Monitors EC2 instance performance:
+
+- ✅ CPU utilization  
+- ✅ Disk usage (via CloudWatch Agent)  
+- ❌ RDS metrics (not yet implemented)  
+
+### Disk Monitoring Config
+```json
+{
+  "metrics": {
+    "metrics_collected": {
+      "disk": {
+        "measurement": ["used_percent"],
+        "resources": ["*"]
+      }
+    }
+  }
+}
+```
+### Alerting Flow
+
+- CloudWatch Alarm monitors EC2 metrics (e.g., CPU or disk usage).
+- When the threshold is breached (e.g., CPU > 80%), it triggers an alarm.
+- The alarm is connected to an **SNS Topic**.
+- SNS sends an **email notification** to the configured subscriber.
+
+**Email Variable:**
+
+You can set the recipient email as a variable in Terraform using the **.tfvars**:
+
+```hcl
+variable "alert_email" {
+  description = "Email to receive CloudWatch alerts"
+  type        = string
+}
+```
+
+**Usage in SNS Subscription:**
+```hcl
+resource "aws_sns_topic" "cloudwatch_alerts" {
+  name = "cloudwatch-alerts"
+}
+
+resource "aws_sns_topic_subscription" "email_subscription" {
+  topic_arn = aws_sns_topic.cloudwatch_alerts.arn
+  protocol  = "email"
+  endpoint  = var.alert_email
+}
+```
+**After Deployment:**
+
+You will receive a confirmation email from AWS to confirm the subscription.
+No alerts will be sent until the email is confirmed.
+
+---
+
+## Deployment Steps
+
+**Initialize Terraform**
+```bash
+terraform init
+```
+**Review the plan**
+```bash
+terraform plan
+```
+**Apply the Infrastructure**
+```bash
+terraform apply -auto-approve
+```
+**Connect to a running EC2 instance**
+```bash
+ssh -i your-key.pem ec2-user@<public-ip>
+```
+**Start the app using docker**
+```bash
+cd /home/AWS_grocery
+sudo docker-compose up -d --build
+```
+**Access the app**
+```bash
+http://<your-alb-dns-name>
+```
+**Monitor logs in real-time**
+```bash
+aws logs tail /aws/ec2/syslog --follow
+```
+**Dont forget to Teardown all resources when your done**
+
+**It could kill your wallet pretty fast**
+```bash
+terraform destroy -auto-approve
+```
 
-You should see the version you installed (e.g., `3.12.1`).
 
-## Continue with the project installation
-Open the project in your preferred IDE (e.g., PyCharm).
-
-Open the IDE terminal.
-
-Navigate to the backend folder:
-
-    cd backend
-
-Create a virtual environment: 
-
-    python3 -m venv venv
-
-Activate the virtual environment: 
- - On macOS/Linux: 
-
-
-    source venv/bin/activate  
-- On Windows use
-
-
-    venv\Scripts\activate
-
-Install Requirements:
-
-    pip install -r requirements.txt
-
-Create an `.env` file for the backend:
-
-- On macOS:
-
-  - Use nano to create the `.env` file:
-
-        touch .env
-
-- On Windows:
-
-  - Use ni to create the `.env` file
-
-        ni .env -Force
-       
-  
-Generate the JWT Secret Key 
-- To generate a secure `JWT_SECRET_KEY`, run the following command:
-
-      python -c "import secrets; print(secrets.token_hex(32))"
-
-Example:
-  `094bb15924a8a63d82f612b978e8bc758d5c3f0330a41beefb36f45b587411d4`
-- This key will be used to secure user sessions
-- Copy the generated key from your terminal
-
-Edit the .env file
-
-- On macOS:
-
-      nano .env
-
-  Paste your copied JWT Secret Key into the file like this
-`JWT_SECRET_KEY=094bb15924a8a63d82f612b978e8bc758d5c3f0330a41beefb36f45b587411d4`
-
-  Also paste enviroment variable for flask:
-
-      FLASK_ENV=development
-  Exit and save.
-
-
-- On Windows:
-  
-      notepad .env
-
-  Paste your copied JWT Secret Key into the file like this
-`JWT_SECRET_KEY=094bb15924a8a63d82f612b978e8bc758d5c3f0330a41beefb36f45b587411d4`
-
-  Also paste enviroment variable for flask:
-
-      FLASK_ENV=development
-  Exit and save.
-
-
-## Frontend
-
-Navigate to the Frontend Directory:
-
-    cd ../frontend
-
-Create the `.env` File for the Frontend. Use same commands for creating and editing .env files as [above]((#create-an-env-file-for-the-backend))
-
-- Set a port for your backend server inside the .env file:
-  
-      REACT_APP_BACKEND_SERVER=http://localhost:5000
-
-Install Dependencies and generate the build:
-    
-    npm install
-    npm run build
-
-
-Start the Application:
-    
-        cd ../backend
-        python run.py
-
-Navigate and get familiar with the app
-
-Usage
-
-    Register or Login:
-        Open the application in your browser ---> http://localhost:5000
-        Register a new account or log in with your existing credentials.
-
-    Upload avatars:
-        Upload an image and use it as the avatar of the user
-
-    Search for Products:
-        Use the search bar to find products.
-        Sort products by price or filter by categories in store.
-
-    Products:
-        Add, edit, or delete reviews of products you buyed
-
-    Add to Favorites and Basket:
-        Add products to your favorites list for quick access.
-        Add products to your basket to proceed with the purchase.
-
-    Checkout:
-        Go to your basket and click on the checkout button.
-        Fill in your billing and shipping information.
-        Choose your preferred payment method.
-        Review the total cost and confirm your purchase.
