@@ -3,7 +3,7 @@
 
 ## **About**
 
-This project is part of the Cloud Track in the Masterschool Software Engineering bootcamp. The app was built by our mentor Alejandro Román. Our task was to design and then deploy the **AWS infrastructure** step by step using **Terraform**.
+This project is part of the Cloud Track in the Masterschool Software Engineering bootcamp. The app was built by our mentor Alejandro Román. Our task was to design and deploy the **AWS infrastructure** step by step using **Terraform**.
 
 I focused on implementing each AWS component to ensure a scalable and reliable setup. The goal was to practice and learn about AWS and Terraform with this hands-on Project.
 
